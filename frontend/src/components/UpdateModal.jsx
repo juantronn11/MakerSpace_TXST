@@ -1,20 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { updatePrinterStatus } from '../lib/printers'
 
-const DURATIONS = [
-  { value: '15',     label: '15 min' },
-  { value: '30',     label: '30 min' },
-  { value: '45',     label: '45 min' },
-  { value: '60',     label: '1 hr'   },
-  { value: '90',     label: '1.5 hr' },
-  { value: '120',    label: '2 hr'   },
-  { value: '240',    label: '4 hr'   },
-  { value: 'custom', label: 'Custom' },
-]
-
 export default function UpdateModal({ printer, onClose, onSuccess, onError, isDemo }) {
   const [status,       setStatus]       = useState('available')
-  const [duration,     setDuration]     = useState('15')
   const [customDays,   setCustomDays]   = useState('')
   const [customHours,  setCustomHours]  = useState('')
   const [customMins,   setCustomMins]   = useState('')
@@ -31,7 +19,6 @@ export default function UpdateModal({ printer, onClose, onSuccess, onError, isDe
   useEffect(() => {
     if (printer) {
       setStatus(printer.status || 'available')
-      setDuration('15')
       setCustomDays('')
       setCustomHours('')
       setCustomMins('')
@@ -68,15 +55,10 @@ export default function UpdateModal({ printer, onClose, onSuccess, onError, isDe
     try {
       let estimatedFinish = null
       if (status === 'in_use') {
-        let mins
-        if (duration === 'custom') {
-          const d = parseInt(customDays)  || 0
-          const h = parseInt(customHours) || 0
-          const m = parseInt(customMins)  || 0
-          mins = d * 1440 + h * 60 + m
-        } else {
-          mins = parseInt(duration)
-        }
+        const d    = parseInt(customDays)  || 0
+        const h    = parseInt(customHours) || 0
+        const m    = parseInt(customMins)  || 0
+        const mins = d * 1440 + h * 60 + m
         estimatedFinish = mins > 0 ? new Date(Date.now() + mins * 60000) : null
       }
       await updatePrinterStatus(printer.id, { status, estimatedFinish, photoFile, printerKey })
@@ -128,51 +110,38 @@ export default function UpdateModal({ printer, onClose, onSuccess, onError, isDe
             </div>
           </div>
 
-          {/* Duration (only when In Use) */}
+          {/* Time remaining (only when In Use) */}
           {status === 'in_use' && (
             <div className="field">
               <label className="field-label">
                 Time remaining <span className="hint">(countdown shown to all users)</span>
               </label>
-              <div className="dur-grid">
-                {DURATIONS.map(d => (
-                  <div
-                    key={d.value}
-                    className={`dur-opt${duration === d.value ? ' selected' : ''}`}
-                    onClick={() => { setDuration(d.value); if (d.value !== 'custom') setCustomTime('') }}
-                  >
-                    <label style={{ cursor: 'pointer' }}>{d.label}</label>
-                  </div>
-                ))}
-              </div>
-              {duration === 'custom' && (
-                <div className="custom-dhm-row">
-                  <div className="custom-dhm-field">
-                    <input
-                      type="number" className="field-input" min="0" max="30"
-                      placeholder="0" value={customDays}
-                      onChange={e => setCustomDays(e.target.value)} autoFocus
-                    />
-                    <span className="custom-dhm-label">days</span>
-                  </div>
-                  <div className="custom-dhm-field">
-                    <input
-                      type="number" className="field-input" min="0" max="23"
-                      placeholder="0" value={customHours}
-                      onChange={e => setCustomHours(e.target.value)}
-                    />
-                    <span className="custom-dhm-label">hours</span>
-                  </div>
-                  <div className="custom-dhm-field">
-                    <input
-                      type="number" className="field-input" min="0" max="59"
-                      placeholder="0" value={customMins}
-                      onChange={e => setCustomMins(e.target.value)}
-                    />
-                    <span className="custom-dhm-label">min</span>
-                  </div>
+              <div className="custom-dhm-row">
+                <div className="custom-dhm-field">
+                  <input
+                    type="number" className="field-input" min="0" max="30"
+                    placeholder="0" value={customDays}
+                    onChange={e => setCustomDays(e.target.value)}
+                  />
+                  <span className="custom-dhm-label">days</span>
                 </div>
-              )}
+                <div className="custom-dhm-field">
+                  <input
+                    type="number" className="field-input" min="0" max="23"
+                    placeholder="0" value={customHours}
+                    onChange={e => setCustomHours(e.target.value)}
+                  />
+                  <span className="custom-dhm-label">hours</span>
+                </div>
+                <div className="custom-dhm-field">
+                  <input
+                    type="number" className="field-input" min="0" max="59"
+                    placeholder="0" value={customMins}
+                    onChange={e => setCustomMins(e.target.value)}
+                  />
+                  <span className="custom-dhm-label">min</span>
+                </div>
+              </div>
             </div>
           )}
 

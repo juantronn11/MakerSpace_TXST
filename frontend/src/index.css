@@ -230,15 +230,6 @@ header {
 .opt-maintenance label { color: #d97706; }
 .opt-maintenance.selected label { border-color: #d97706; background: #fffbeb; }
 
-/* duration selector */
-.dur-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
-.dur-opt label {
-  display: block; text-align: center; padding: 8px 4px;
-  border: 1.5px solid var(--border); border-radius: 9px; cursor: pointer;
-  font-size: 0.8rem; font-weight: 500; color: var(--muted); transition: all 0.15s;
-}
-.dur-opt.selected label { border-color: var(--accent); background: #eff6ff; color: var(--accent); }
-
 /* custom days / hours / minutes input */
 .custom-dhm-row {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px;
