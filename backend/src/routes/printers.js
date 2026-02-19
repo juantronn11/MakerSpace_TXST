@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
+import { isConfigured as cloudConfigured, fetchCloudStatus } from '../lib/ultimaker.js'
 
 const router = Router()
 
@@ -24,69 +25,83 @@ router.get('/', async (_req, res, next) => {
   }
 })
 
-// GET /api/printers/:id/live — proxy to the printer's cluster API
-// IP resolved from PRINTER_IPS env var using the printer's key — never from Firestore
+// GET /api/printers/:id/live — fetch live data via cloud (Digital Factory) or direct IP
+// Priority: Digital Factory cloud API (if env vars set) → direct IP (PRINTER_IPS) → no_key
 router.get('/:id/live', async (req, res, next) => {
   try {
     const docSnap = await getFirestore().collection('printers').doc(req.params.id).get()
     if (!docSnap.exists) return res.status(404).json({ error: 'Printer not found' })
 
-    const data      = docSnap.data()
-    const printerIp = getIpMap()[data.printerKey]
-
+    const data = docSnap.data()
     if (!data.printerKey) return res.json({ live: false, reason: 'no_key' })
-    if (!printerIp)       return res.json({ live: false, reason: 'key_not_in_env' })
 
-    const base       = `http://${printerIp}/cluster-api/v1`
-    const controller = new AbortController()
-    const timeout    = setTimeout(() => controller.abort(), 5000)
+    let rawStatus, job
 
-    let jobsJson, printersJson
-    try {
-      const [jobsRes, printersRes] = await Promise.all([
-        fetch(`${base}/print_jobs`, { signal: controller.signal }),
-        fetch(`${base}/printers`,   { signal: controller.signal }),
-      ])
-      clearTimeout(timeout)
-      jobsJson     = await jobsRes.json()
-      printersJson = await printersRes.json()
-    } catch (fetchErr) {
-      clearTimeout(timeout)
-      const reason = fetchErr.name === 'AbortError' ? 'timeout' : fetchErr.message
-      return res.json({ live: false, reason })
+    // ── Path A: Ultimaker Digital Factory cloud API ──────────────────────────
+    if (cloudConfigured()) {
+      try {
+        const cloud = await fetchCloudStatus(data.printerKey)
+        rawStatus   = cloud.printerStatus
+        job         = cloud.job
+      } catch (cloudErr) {
+        console.warn('Digital Factory API error:', cloudErr.message)
+        return res.json({ live: false, reason: cloudErr.message })
+      }
     }
 
-    // Normalize job data
-    const activeJob = jobsJson.find(j => j.status === 'printing') ?? jobsJson[0] ?? null
-    const job = activeJob ? {
-      name:            activeJob.name          ?? 'Unknown job',
-      status:          activeJob.status        ?? 'unknown',
-      timeElapsed:     activeJob.time_elapsed  ?? 0,
-      timeTotal:       activeJob.time_total    ?? 0,
-      timeRemaining:   Math.max(0, (activeJob.time_total ?? 0) - (activeJob.time_elapsed ?? 0)),
-      percentComplete: activeJob.time_total > 0
-        ? Math.min(100, Math.round((activeJob.time_elapsed / activeJob.time_total) * 100))
-        : 0,
-    } : null
+    // ── Path B: Direct local-network IP (cluster-api/v1) ────────────────────
+    else {
+      const printerIp = getIpMap()[data.printerKey]
+      if (!printerIp) return res.json({ live: false, reason: 'key_not_in_env' })
 
-    // Normalize printer status → our status vocabulary
-    const rawStatus = printersJson[0]?.status ?? 'idle'
+      const base       = `http://${printerIp}/cluster-api/v1`
+      const controller = new AbortController()
+      const timeout    = setTimeout(() => controller.abort(), 5000)
+
+      let jobsJson, printersJson
+      try {
+        const [jobsRes, printersRes] = await Promise.all([
+          fetch(`${base}/print_jobs`, { signal: controller.signal }),
+          fetch(`${base}/printers`,   { signal: controller.signal }),
+        ])
+        clearTimeout(timeout)
+        jobsJson     = await jobsRes.json()
+        printersJson = await printersRes.json()
+      } catch (fetchErr) {
+        clearTimeout(timeout)
+        const reason = fetchErr.name === 'AbortError' ? 'timeout' : fetchErr.message
+        return res.json({ live: false, reason })
+      }
+
+      rawStatus = printersJson[0]?.status ?? 'idle'
+
+      const activeJob = jobsJson.find(j => j.status === 'printing') ?? jobsJson[0] ?? null
+      job = activeJob ? {
+        name:            activeJob.name          ?? 'Unknown job',
+        status:          activeJob.status        ?? 'unknown',
+        timeElapsed:     activeJob.time_elapsed  ?? 0,
+        timeTotal:       activeJob.time_total    ?? 0,
+        timeRemaining:   Math.max(0, (activeJob.time_total ?? 0) - (activeJob.time_elapsed ?? 0)),
+        percentComplete: activeJob.time_total > 0
+          ? Math.min(100, Math.round((activeJob.time_elapsed / activeJob.time_total) * 100))
+          : 0,
+      } : null
+    }
+
+    // ── Normalize status and auto-sync Firestore ─────────────────────────────
     const liveStatus =
-      rawStatus === 'idle'        ? 'available'   :
-      rawStatus === 'error'       ? 'maintenance'  :
-      rawStatus === 'maintenance' ? 'maintenance'  : 'in_use'
+      rawStatus === 'idle'        ? 'available'  :
+      rawStatus === 'error'       ? 'maintenance' :
+      rawStatus === 'maintenance' ? 'maintenance' : 'in_use'
 
-    // Auto-sync Firestore if status drifted
     if (liveStatus !== data.status) {
       const update = {
         status:      liveStatus,
         lastUpdated: FieldValue.serverTimestamp(),
       }
-      if (liveStatus === 'in_use' && job?.timeRemaining) {
-        update.estimatedFinish = new Date(Date.now() + job.timeRemaining * 1000)
-      } else {
-        update.estimatedFinish = null
-      }
+      update.estimatedFinish = (liveStatus === 'in_use' && job?.timeRemaining)
+        ? new Date(Date.now() + job.timeRemaining * 1000)
+        : null
       await getFirestore().collection('printers').doc(req.params.id).update(update)
     }
 
