@@ -1,17 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { updatePrinterStatus } from '../lib/printers'
 
 export default function UpdateModal({ printer, onClose, onSuccess, onError, isDemo }) {
-  const [status,       setStatus]       = useState('available')
-  const [customDays,   setCustomDays]   = useState('')
-  const [customHours,  setCustomHours]  = useState('')
-  const [customMins,   setCustomMins]   = useState('')
-  const [printerKey,    setPrinterKey]    = useState('')
-  const [photoFile,    setPhotoFile]    = useState(null)
-  const [photoPreview, setPhotoPreview] = useState(null)
-  const [dragging,     setDragging]     = useState(false)
-  const [saving,       setSaving]       = useState(false)
-  const fileRef = useRef(null)
+  const [status,      setStatus]      = useState('available')
+  const [customDays,  setCustomDays]  = useState('')
+  const [customHours, setCustomHours] = useState('')
+  const [customMins,  setCustomMins]  = useState('')
+  const [printerKey,  setPrinterKey]  = useState('')
+  const [saving,      setSaving]      = useState(false)
 
   const open = Boolean(printer)
 
@@ -23,31 +19,8 @@ export default function UpdateModal({ printer, onClose, onSuccess, onError, isDe
       setCustomHours('')
       setCustomMins('')
       setPrinterKey(printer.printerKey || '')
-      clearPhoto()
     }
   }, [printer?.id])
-
-  function clearPhoto() {
-    setPhotoFile(null)
-    setPhotoPreview(null)
-    if (fileRef.current) fileRef.current.value = ''
-  }
-
-  function handleFileSelect(file) {
-    if (!file) return
-    if (file.size > 5 * 1024 * 1024) { onError('Photo must be under 5 MB'); return }
-    setPhotoFile(file)
-    const reader = new FileReader()
-    reader.onload = e => setPhotoPreview(e.target.result)
-    reader.readAsDataURL(file)
-  }
-
-  function onDrop(e) {
-    e.preventDefault()
-    setDragging(false)
-    const f = e.dataTransfer.files[0]
-    if (f?.type.startsWith('image/')) handleFileSelect(f)
-  }
 
   async function handleSubmit() {
     if (isDemo) { onError('Demo mode — Firebase not configured'); return }
@@ -61,7 +34,7 @@ export default function UpdateModal({ printer, onClose, onSuccess, onError, isDe
         const mins = d * 1440 + h * 60 + m
         estimatedFinish = mins > 0 ? new Date(Date.now() + mins * 60000) : null
       }
-      await updatePrinterStatus(printer.id, { status, estimatedFinish, photoFile, printerKey })
+      await updatePrinterStatus(printer.id, { status, estimatedFinish, printerKey })
       onSuccess('Status updated!')
       onClose()
     } catch (err) {
@@ -92,9 +65,9 @@ export default function UpdateModal({ printer, onClose, onSuccess, onError, isDe
             <label className="field-label">Status</label>
             <div className="status-grid">
               {[
-                { value: 'available',   label: 'Available',   cls: 'opt-available',   icon: <CheckIcon /> },
-                { value: 'in_use',      label: 'In Use',      cls: 'opt-in_use',      icon: <ClockIcon /> },
-                { value: 'maintenance', label: 'Down',        cls: 'opt-maintenance', icon: <WarnIcon />  },
+                { value: 'available',   label: 'Available', cls: 'opt-available',   icon: <CheckIcon /> },
+                { value: 'in_use',      label: 'In Use',    cls: 'opt-in_use',      icon: <ClockIcon /> },
+                { value: 'maintenance', label: 'Down',      cls: 'opt-maintenance', icon: <WarnIcon />  },
               ].map(opt => (
                 <div
                   key={opt.value}
@@ -145,50 +118,15 @@ export default function UpdateModal({ printer, onClose, onSuccess, onError, isDe
             </div>
           )}
 
-          {/* Photo upload */}
+          {/* Printer Key */}
           <div className="field">
             <label className="field-label">
-              Photo <span className="hint">(optional — shows current state)</span>
-            </label>
-
-            {photoPreview ? (
-              <div className="photo-prev">
-                <img src={photoPreview} alt="Preview" />
-                <button className="photo-remove" onClick={clearPhoto}>✕</button>
-              </div>
-            ) : (
-              <div
-                className={`photo-drop${dragging ? ' drag' : ''}`}
-                onDragOver={e => { e.preventDefault(); setDragging(true) }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={onDrop}
-                onClick={() => fileRef.current?.click()}
-              >
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  onChange={e => handleFileSelect(e.target.files[0])}
-                />
-                <div className="photo-drop-text">
-                  <CameraIcon />
-                  <strong>Click to upload</strong> or drag &amp; drop<br />
-                  <span style={{ fontSize: '0.77rem' }}>JPG, PNG, WebP · max 5 MB</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Printer Key — persists across updates */}
-          <div className="field">
-            <label className="field-label">
-              Printer Key <span className="hint">(must match a key in backend/.env → PRINTER_IPS)</span>
+              Printer Key <span className="hint">(links to live API data)</span>
             </label>
             <input
               type="text"
               className="field-input"
-              placeholder="e.g. printer1"
+              placeholder="e.g. ums5-1"
               value={printerKey}
               onChange={e => setPrinterKey(e.target.value)}
             />
@@ -225,14 +163,6 @@ function WarnIcon() {
   return (
     <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-    </svg>
-  )
-}
-function CameraIcon() {
-  return (
-    <svg width="32" height="32" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"
-      style={{ margin: '0 auto 8px', display: 'block', color: '#94a3b8' }}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
     </svg>
   )
 }

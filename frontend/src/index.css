@@ -238,25 +238,6 @@ header {
 .custom-dhm-field .field-input { text-align: center; }
 .custom-dhm-label { font-size: 0.75rem; font-weight: 600; color: var(--muted); text-align: center; }
 
-/* photo upload */
-.photo-drop {
-  border: 2px dashed var(--border); border-radius: 12px; padding: 22px;
-  text-align: center; cursor: pointer; transition: all 0.15s; background: var(--bg);
-  position: relative;
-}
-.photo-drop:hover, .photo-drop.drag { border-color: var(--accent); background: #eff6ff; }
-.photo-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
-.photo-drop-text { font-size: 0.875rem; color: var(--muted); pointer-events: none; }
-.photo-drop-text strong { color: var(--accent); }
-
-.photo-prev { position: relative; border-radius: 10px; overflow: hidden; }
-.photo-prev img { width: 100%; max-height: 160px; object-fit: cover; display: block; }
-.photo-remove {
-  position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.6);
-  color: white; border: none; width: 28px; height: 28px; border-radius: 50%;
-  cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.95rem;
-}
-
 /* actions */
 .form-actions { display: flex; gap: 10px; justify-content: flex-end; padding-top: 4px; }
 .btn-submit {

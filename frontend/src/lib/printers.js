@@ -1,8 +1,5 @@
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { storage } from './firebase'
-
-const API_BASE   = import.meta.env.VITE_API_URL   ?? ''
-const ADMIN_KEY  = import.meta.env.VITE_ADMIN_KEY ?? ''
+const API_BASE  = import.meta.env.VITE_API_URL   ?? ''
+const ADMIN_KEY = import.meta.env.VITE_ADMIN_KEY ?? ''
 
 function authHeaders() {
   return {
@@ -24,20 +21,9 @@ async function apiReq(path, method, body) {
   return res.json()
 }
 
-export async function updatePrinterStatus(id, { status, estimatedFinish, photoFile, printerKey }) {
-  let photoUrl
-  if (photoFile) {
-    // Photo upload stays client-side (Firebase Storage); only the resulting URL
-    // goes to the backend so it can be stored in Firestore via Admin SDK.
-    const storageRef = ref(storage, `printer-photos/${id}/${Date.now()}_${photoFile.name}`)
-    await uploadBytes(storageRef, photoFile)
-    photoUrl = await getDownloadURL(storageRef)
-  }
-
+export async function updatePrinterStatus(id, { status, estimatedFinish, printerKey }) {
   const body = { status, estimatedFinish: estimatedFinish?.toISOString?.() ?? estimatedFinish ?? null }
-  if (photoUrl    !== undefined) body.photoUrl   = photoUrl
-  if (printerKey  !== undefined) body.printerKey = printerKey
-
+  if (printerKey !== undefined) body.printerKey = printerKey
   await apiReq(`/api/printers/${id}`, 'PATCH', body)
 }
 
