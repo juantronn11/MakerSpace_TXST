@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Printer Status — MakerSpace</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f0f4f8;
+      --card: #ffffff;
+      --accent: #3b82f6;
+      --available: #22c55e;
+      --in-use: #f97316;
+      --maintenance: #eab308;
+      --likely: #14b8a6;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --shadow: 0 2px 8px rgba(0,0,0,0.08);
+      --shadow-lg: 0 8px 28px rgba(0,0,0,0.14);
+      --radius: 16px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      color: var(--text);
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+      color: white;
+      padding: 20px 24px 16px;
+    }
+    .header-inner { max-width: 1200px; margin: 0 auto; }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .header-title h1 { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.3px; }
+    .header-title h1 .accent { color: #60a5fa; }
+    .header-title p { font-size: 0.84rem; color: rgba(255,255,255,0.6); margin-top: 3px; }
+
+    .stats-bar { display: flex; gap: 22px; flex-wrap: wrap; }
+    .stat-item { display: flex; align-items: center; gap: 7px; font-size: 0.875rem; color: rgba(255,255,255,0.88); }
+    .stat-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .stat-count { font-weight: 700; font-size: 1rem; }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 9px; font-size: 0.875rem;
+      font-weight: 600; cursor: pointer; border: none; transition: all 0.15s;
+    }
+    .btn-ghost {
+      background: rgba(255,255,255,0.12); color: white;
+      border: 1px solid rgba(255,255,255,0.22);
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.22); }
+
+    /* ── SETUP BANNER ── */
+    .setup-banner {
+      background: #fefce8; border-bottom: 2px solid #fde047;
+      padding: 13px 24px; font-size: 0.875rem; color: #713f12;
+    }
+    .setup-banner a { color: #1d4ed8; font-weight: 600; }
+    .setup-banner code { background: #fef9c3; padding: 1px 5px; border-radius: 4px; font-size: 0.8rem; }
+
+    /* ── MAIN ── */
+    main { max-width: 1200px; margin: 28px auto; padding: 0 24px; }
+    .section-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+    }
+    .section-label {
+      font-size: 0.75rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+
+    /* ── GRID ── */
+    .printer-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
+      gap: 18px;
+    }
+
+    /* ── CARD ── */
+    .printer-card {
+      background: var(--card); border-radius: var(--radius); overflow: hidden;
+      box-shadow: var(--shadow); transition: transform 0.2s, box-shadow 0.2s; cursor: pointer;
+    }
+    .printer-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+
+    .card-photo {
+      position: relative; height: 178px; background: #dde3ed; overflow: hidden;
+    }
+    .card-photo img { width: 100%; height: 100%; object-fit: cover; }
+    .photo-placeholder {
+      width: 100%; height: 100%; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 8px; color: #94a3b8;
+    }
+    .photo-placeholder svg { opacity: 0.45; }
+    .photo-placeholder span { font-size: 0.78rem; }
+
+    .status-badge {
+      position: absolute; top: 11px; right: 11px;
+      padding: 4px 11px; border-radius: 20px;
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: white;
+    }
+    .s-available   { background: var(--available); }
+    .s-in_use      { background: var(--in-use); }
+    .s-maintenance { background: var(--maintenance); color: #713f12; }
+    .s-likely      { background: var(--likely); }
+
+    .card-body { padding: 14px 16px 16px; }
+    .card-name { font-size: 1.02rem; font-weight: 700; margin-bottom: 5px; }
+    .card-time {
+      font-size: 0.82rem; color: var(--muted); margin-bottom: 12px;
+      min-height: 1.1em; display: flex; align-items: center; gap: 5px;
+    }
+    .update-btn {
+      width: 100%; padding: 9px; border-radius: 9px;
+      background: var(--bg); border: 1.5px solid var(--border);
+      color: var(--muted); font-size: 0.84rem; font-weight: 600;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .update-btn:hover { background: var(--accent); border-color: var(--accent); color: white; }
+    .card-updated { font-size: 0.7rem; color: var(--muted); margin-top: 8px; text-align: right; }
+
+    /* ── EMPTY / LOADING ── */
+    .empty-state {
+      grid-column: 1/-1; text-align: center; padding: 64px 24px; color: var(--muted);
+    }
+    .empty-state svg { width: 60px; height: 60px; margin: 0 auto 16px; opacity: 0.35; display: block; }
+    .empty-state h3 { font-size: 1.1rem; color: var(--text); margin-bottom: 7px; }
+    .empty-state p { font-size: 0.875rem; }
+
+    .spinner {
+      width: 38px; height: 38px; margin: 0 auto 14px;
+      border: 3px solid rgba(0,0,0,0.1); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── MODAL ── */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.52);
+      backdrop-filter: blur(4px); display: flex; align-items: center;
+      justify-content: center; z-index: 100; padding: 16px;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    .overlay.open { opacity: 1; pointer-events: all; }
+
+    .modal {
+      background: white; border-radius: 20px; width: 100%; max-width: 480px;
+      max-height: 92vh; overflow-y: auto;
+      box-shadow: 0 28px 64px rgba(0,0,0,0.3);
+      transform: scale(0.96) translateY(8px); transition: transform 0.2s;
+    }
+    .overlay.open .modal { transform: scale(1) translateY(0); }
+
+    .modal-head {
+      padding: 20px 24px 0; display: flex;
+      justify-content: space-between; align-items: center;
+    }
+    .modal-head h2 { font-size: 1.12rem; font-weight: 700; }
+    .close-btn {
+      background: var(--bg); border: none; width: 32px; height: 32px;
+      border-radius: 50%; cursor: pointer; display: flex; align-items: center;
+      justify-content: center; color: var(--muted); font-size: 1rem; transition: background 0.15s;
+    }
+    .close-btn:hover { background: var(--border); }
+
+    .modal-body { padding: 20px 24px 24px; }
+
+    .field { margin-bottom: 18px; }
+    .field-label {
+      display: block; font-size: 0.875rem; font-weight: 600;
+      color: var(--text); margin-bottom: 7px;
+    }
+    .field-label .hint { color: var(--muted); font-weight: 400; }
+    .field-input {
+      width: 100%; padding: 10px 14px; border: 1.5px solid var(--border);
+      border-radius: 10px; font-size: 0.9rem; color: var(--text);
+      outline: none; transition: border-color 0.15s; background: white;
+    }
+    .field-input:focus { border-color: var(--accent); }
+
+    /* status selector */
+    .status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .status-opt { position: relative; }
+    .status-opt input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .status-opt label {
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+      padding: 10px 6px; border: 2px solid var(--border); border-radius: 12px;
+      cursor: pointer; font-size: 0.8rem; font-weight: 600; transition: all 0.15s; text-align: center;
+    }
+    .opt-available label { color: var(--available); }
+    .opt-available input:checked + label { border-color: var(--available); background: #f0fdf4; }
+    .opt-in_use label { color: var(--in-use); }
+    .opt-in_use input:checked + label { border-color: var(--in-use); background: #fff7ed; }
+    .opt-maintenance label { color: #d97706; }
+    .opt-maintenance input:checked + label { border-color: #d97706; background: #fffbeb; }
+
+    /* duration selector */
+    .dur-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+    .dur-opt { position: relative; }
+    .dur-opt input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .dur-opt label {
+      display: block; text-align: center; padding: 8px 4px;
+      border: 1.5px solid var(--border); border-radius: 9px; cursor: pointer;
+      font-size: 0.8rem; font-weight: 500; color: var(--muted); transition: all 0.15s;
+    }
+    .dur-opt input:checked + label {
+      border-color: var(--accent); background: #eff6ff; color: var(--accent);
+    }
+    #customTimeWrap { display: none; margin-top: 10px; }
+
+    /* photo upload */
+    .photo-drop {
+      border: 2px dashed var(--border); border-radius: 12px; padding: 22px;
+      text-align: center; cursor: pointer; transition: all 0.15s; background: var(--bg);
+      position: relative;
+    }
+    .photo-drop:hover, .photo-drop.drag { border-color: var(--accent); background: #eff6ff; }
+    .photo-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .photo-drop-text { font-size: 0.875rem; color: var(--muted); pointer-events: none; }
+    .photo-drop-text strong { color: var(--accent); }
+
+    .photo-prev { display: none; position: relative; border-radius: 10px; overflow: hidden; }
+    .photo-prev img { width: 100%; max-height: 160px; object-fit: cover; display: block; }
+    .photo-remove {
+      position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.6);
+      color: white; border: none; width: 28px; height: 28px; border-radius: 50%;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.95rem;
+    }
+
+    /* actions */
+    .form-actions { display: flex; gap: 10px; justify-content: flex-end; padding-top: 4px; }
+    .btn-submit {
+      background: var(--accent); color: white; padding: 10px 24px;
+      border-radius: 10px; border: none; font-size: 0.9rem; font-weight: 700;
+      cursor: pointer; transition: background 0.15s; display: flex; align-items: center; gap: 8px;
+    }
+    .btn-submit:hover { background: #2563eb; }
+    .btn-submit:disabled { background: #93c5fd; cursor: not-allowed; }
+    .btn-cancel {
+      background: var(--bg); color: var(--muted); padding: 10px 20px;
+      border-radius: 10px; border: 1.5px solid var(--border);
+      font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: background 0.15s;
+    }
+    .btn-cancel:hover { background: var(--border); }
+
+    .mini-spinner {
+      width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.35);
+      border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block;
+    }
+
+    /* ── TOASTS ── */
+    .toasts {
+      position: fixed; bottom: 22px; right: 22px; z-index: 200;
+      display: flex; flex-direction: column; gap: 9px;
+    }
+    .toast {
+      background: #1e293b; color: white; padding: 12px 18px;
+      border-radius: 12px; font-size: 0.875rem; max-width: 300px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.22); animation: slideUp 0.2s ease;
+    }
+    .toast.ok  { background: #15803d; }
+    .toast.err { background: #dc2626; }
+    @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    @media (max-width: 600px) {
+      .header-top { flex-direction: column; }
+      main { padding: 0 14px; margin: 18px auto; }
+      .printer-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="header-top">
+      <div class="header-title">
+        <h1>MakerSpace <span class="accent">3D Printers</span></h1>
+        <p>Real-time availability — updated by students &amp; staff</p>
+      </div>
+      <div>
+        <button class="btn btn-ghost" onclick="openAddModal()">+ Add Printer</button>
+      </div>
+    </div>
+    <div class="stats-bar">
+      <div class="stat-item">
+        <div class="stat-dot" style="background:var(--available)"></div>
+        <span class="stat-count" id="cAvail">0</span> Available
+      </div>
+      <div class="stat-item">
+        <div class="stat-dot" style="background:var(--in-use)"></div>
+        <span class="stat-count" id="cInUse">0</span> In Use
+      </div>
+      <div class="stat-item">
+        <div class="stat-dot" style="background:var(--maintenance)"></div>
+        <span class="stat-count" id="cMaint">0</span> Down
+      </div>
+    </div>
+  </div>
+</header>
+
+<div id="setupBanner" class="setup-banner" style="display:none">
+  ⚠️ <strong>Firebase not configured — showing demo data.</strong>
+  <a href="https://console.firebase.google.com" target="_blank">Create a Firebase project</a>,
+  then replace the <code>firebaseConfig</code> values near the bottom of this file to enable live sync.
+</div>
+
+<main>
+  <div class="section-header">
+    <span class="section-label">All Printers</span>
+  </div>
+  <div class="printer-grid" id="grid">
+    <div class="empty-state">
+      <div class="spinner"></div>
+      <p>Loading printers…</p>
+    </div>
+  </div>
+</main>
+
+<!-- ── UPDATE MODAL ── -->
+<div class="overlay" id="updateOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Update Printer Status</h2>
+      <button class="close-btn" onclick="closeModal('updateOverlay')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editId">
+
+      <div class="field">
+        <div class="field-label">Printer</div>
+        <div id="editName" style="font-weight:700;font-size:1.02rem;color:var(--text)"></div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Status</label>
+        <div class="status-grid">
+          <div class="status-opt opt-available">
+            <input type="radio" name="newStatus" id="sAvail" value="available" checked>
+            <label for="sAvail">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+              </svg>
+              Available
+            </label>
+          </div>
+          <div class="status-opt opt-in_use">
+            <input type="radio" name="newStatus" id="sInUse" value="in_use">
+            <label for="sInUse">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 7v5l3 3"/>
+              </svg>
+              In Use
+            </label>
+          </div>
+          <div class="status-opt opt-maintenance">
+            <input type="radio" name="newStatus" id="sMaint" value="maintenance">
+            <label for="sMaint">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              </svg>
+              Down
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="field" id="durField" style="display:none">
+        <label class="field-label">Estimated finish <span class="hint">(how long until done?)</span></label>
+        <div class="dur-grid">
+          <div class="dur-opt"><input type="radio" name="dur" id="d15" value="15" checked><label for="d15">15 min</label></div>
+          <div class="dur-opt"><input type="radio" name="dur" id="d30" value="30"><label for="d30">30 min</label></div>
+          <div class="dur-opt"><input type="radio" name="dur" id="d60" value="60"><label for="d60">1 hr</label></div>
+          <div class="dur-opt"><input type="radio" name="dur" id="d120" value="120"><label for="d120">2 hr</label></div>
+          <div class="dur-opt"><input type="radio" name="dur" id="d240" value="240"><label for="d240">4 hr</label></div>
+          <div class="dur-opt"><input type="radio" name="dur" id="d480" value="480"><label for="d480">8 hr</label></div>
+          <div class="dur-opt"><input type="radio" name="dur" id="dcust" value="custom"><label for="dcust">Custom</label></div>
+        </div>
+        <div id="customTimeWrap">
+          <input type="datetime-local" class="field-input" id="customTime">
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Photo <span class="hint">(optional — shows current state)</span></label>
+        <div class="photo-drop" id="dropZone">
+          <input type="file" id="photoFile" accept="image/*" onchange="onPhotoSelect(event)">
+          <div class="photo-drop-text">
+            <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 8px;display:block;color:#94a3b8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <strong>Click to upload</strong> or drag &amp; drop<br>
+            <span style="font-size:0.77rem">JPG, PNG, WebP · max 5 MB</span>
+          </div>
+        </div>
+        <div class="photo-prev" id="photoPrev">
+          <img id="prevImg" src="" alt="Preview">
+          <button class="photo-remove" onclick="clearPhoto()">✕</button>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn-cancel" onclick="closeModal('updateOverlay')">Cancel</button>
+        <button class="btn-submit" id="submitBtn" onclick="submitUpdate()">Update Status</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD PRINTER MODAL ── -->
+<div class="overlay" id="addOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Add New Printer</h2>
+      <button class="close-btn" onclick="closeModal('addOverlay')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label class="field-label" for="newName">Printer Name</label>
+        <input type="text" id="newName" class="field-input" placeholder="e.g. Printer 3 — Bambu X1C" maxlength="60">
+      </div>
+      <div class="form-actions">
+        <button class="btn-cancel" onclick="closeModal('addOverlay')">Cancel</button>
+        <button class="btn-submit" onclick="addPrinter()">Add Printer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<!-- ── FIREBASE ── -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+
+<script>
+// ════════════════════════════════════════════════════════════
+//  FIREBASE CONFIG
+//  1. Go to https://console.firebase.google.com
+//  2. Create a project → Add a web app
+//  3. Copy your config object and paste it here
+//  4. In Firestore rules, allow read/write (for open access):
+//       rules_version = '2';
+//       service cloud.firestore { match /databases/{db}/documents {
+//         match /{doc=**} { allow read, write: if true; }
+//       }}
+//  5. Enable Firebase Storage and set similar rules
+// ════════════════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT.firebaseapp.com",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId:             "YOUR_APP_ID"
+};
+// ════════════════════════════════════════════════════════════
+
+const CONFIGURED = firebaseConfig.apiKey !== "YOUR_API_KEY";
+let db, storage;
+
+if (CONFIGURED) {
+  firebase.initializeApp(firebaseConfig);
+  db      = firebase.firestore();
+  storage = firebase.storage();
+} else {
+  document.getElementById('setupBanner').style.display = 'block';
+}
+
+// ── DEMO DATA ──
+const DEMO = [
+  { id:'d1', name:'Printer 1 — Bambu X1C',     status:'available',   photoUrl:null, estimatedFinish:null,                         lastUpdated:new Date(Date.now()-5*60000)  },
+  { id:'d2', name:'Printer 2 — Prusa MK4',      status:'in_use',      photoUrl:null, estimatedFinish:new Date(Date.now()+42*60000), lastUpdated:new Date(Date.now()-10*60000) },
+  { id:'d3', name:'Printer 3 — Ender 3 Pro',    status:'maintenance', photoUrl:null, estimatedFinish:null,                         lastUpdated:new Date(Date.now()-2*3600000) },
+  { id:'d4', name:'Printer 4 — Bambu P1S',      status:'available',   photoUrl:null, estimatedFinish:null,                         lastUpdated:new Date(Date.now()-20*60000)  },
+  { id:'d5', name:'Printer 5 — Raise3D Pro3',   status:'in_use',      photoUrl:null, estimatedFinish:new Date(Date.now()-8*60000),  lastUpdated:new Date(Date.now()-90*60000) },
+];
+
+let printers = [];
+let photoFile = null;
+
+// ── INIT ──
+if (CONFIGURED) {
+  db.collection('printers').orderBy('name').onSnapshot(snap => {
+    printers = snap.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        ...data,
+        estimatedFinish: data.estimatedFinish?.toDate?.() ?? null,
+        lastUpdated:     data.lastUpdated?.toDate?.() ?? null,
+      };
+    });
+    render();
+  }, err => {
+    toast('Error loading printers: ' + err.message, 'err');
+  });
+} else {
+  printers = DEMO;
+  setTimeout(render, 200);
+}
+
+// ── RENDER ──
+function render() {
+  const grid = document.getElementById('grid');
+  const now  = new Date();
+
+  if (!printers.length) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <svg fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <path d="M8 21h8M12 17v4"/>
+        </svg>
+        <h3>No printers yet</h3>
+        <p>Click "Add Printer" in the header to get started.</p>
+      </div>`;
+    updateStats([]);
+    return;
+  }
+
+  grid.innerHTML = printers.map(p => {
+    const eff  = effectiveStatus(p, now);
+    const lbl  = { available:'Available', in_use:'In Use', maintenance:'Down', likely:'Likely Free' }[eff];
+    const time = timeInfo(p, eff, now);
+    const ago  = p.lastUpdated ? timeAgo(p.lastUpdated) : '';
+
+    const photo = p.photoUrl
+      ? `<img src="${esc(p.photoUrl)}" alt="${esc(p.name)}" loading="lazy">`
+      : `<div class="photo-placeholder">
+           <svg width="52" height="52" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">
+             <rect x="2" y="3" width="20" height="14" rx="2"/>
+             <path d="M8 21h8M12 17v4"/>
+           </svg>
+           <span>No photo</span>
+         </div>`;
+
+    return `
+      <div class="printer-card" onclick="openUpdateModal('${p.id}')">
+        <div class="card-photo">
+          ${photo}
+          <span class="status-badge s-${eff}">${lbl}</span>
+        </div>
+        <div class="card-body">
+          <div class="card-name">${esc(p.name)}</div>
+          <div class="card-time">${time}</div>
+          <button class="update-btn">Update Status</button>
+          ${ago ? `<div class="card-updated">Updated ${ago}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  updateStats(printers.map(p => effectiveStatus(p, now)));
+}
+
+function effectiveStatus(p, now = new Date()) {
+  if (p.status === 'in_use' && p.estimatedFinish && p.estimatedFinish < now) return 'likely';
+  return p.status;
+}
+
+function timeInfo(p, eff, now) {
+  if (eff === 'available')   return '✓ Ready to use';
+  if (eff === 'likely')      return '⏰ Print time elapsed — may be free';
+  if (eff === 'maintenance') return '⚠ Down for maintenance';
+  if (eff === 'in_use' && p.estimatedFinish) {
+    const ms   = p.estimatedFinish - now;
+    const mins = Math.ceil(ms / 60000);
+    return mins > 60
+      ? `⏱ ~${(ms/3600000).toFixed(1)}h remaining`
+      : `⏱ ~${mins} min remaining`;
+  }
+  return '⏱ In use — finish time unknown';
+}
+
+function updateStats(statuses) {
+  document.getElementById('cAvail').textContent = statuses.filter(s => s === 'available').length;
+  document.getElementById('cInUse').textContent = statuses.filter(s => s === 'in_use' || s === 'likely').length;
+  document.getElementById('cMaint').textContent = statuses.filter(s => s === 'maintenance').length;
+}
+
+// ── MODALS ──
+function openUpdateModal(id) {
+  const p = printers.find(x => x.id === id);
+  if (!p) return;
+
+  document.getElementById('editId').value    = id;
+  document.getElementById('editName').textContent = p.name;
+  document.querySelector(`input[name="newStatus"][value="${p.status || 'available'}"]`).checked = true;
+  toggleDur(p.status);
+  clearPhoto();
+
+  openModal('updateOverlay');
+}
+
+function openAddModal() {
+  document.getElementById('newName').value = '';
+  openModal('addOverlay');
+}
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) closeModal(el.id); });
+});
+
+// status radio → show/hide duration
+document.querySelectorAll('input[name="newStatus"]').forEach(r => {
+  r.addEventListener('change', () => toggleDur(r.value));
+});
+document.querySelectorAll('input[name="dur"]').forEach(r => {
+  r.addEventListener('change', () => {
+    document.getElementById('customTimeWrap').style.display = r.value === 'custom' ? 'block' : 'none';
+  });
+});
+function toggleDur(status) {
+  document.getElementById('durField').style.display = status === 'in_use' ? 'block' : 'none';
+}
+
+// ── PHOTO ──
+function onPhotoSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { toast('Photo must be under 5 MB', 'err'); return; }
+  photoFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('prevImg').src = ev.target.result;
+    document.getElementById('photoPrev').style.display = 'block';
+    document.getElementById('dropZone').style.display  = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearPhoto() {
+  photoFile = null;
+  document.getElementById('photoFile').value = '';
+  document.getElementById('prevImg').src = '';
+  document.getElementById('photoPrev').style.display = 'none';
+  document.getElementById('dropZone').style.display  = 'block';
+}
+
+// drag & drop
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', ()  => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f?.type.startsWith('image/')) onPhotoSelect({ target: { files: [f] } });
+});
+
+// ── SUBMIT UPDATE ──
+async function submitUpdate() {
+  if (!CONFIGURED) { toast('Demo mode — Firebase not configured', 'err'); return; }
+
+  const id     = document.getElementById('editId').value;
+  const status = document.querySelector('input[name="newStatus"]:checked').value;
+  const btn    = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="mini-spinner"></span> Saving…';
+
+  try {
+    let estimatedFinish = null;
+    if (status === 'in_use') {
+      const durVal = document.querySelector('input[name="dur"]:checked').value;
+      if (durVal === 'custom') {
+        const ct = document.getElementById('customTime').value;
+        if (ct) estimatedFinish = new Date(ct);
+      } else {
+        estimatedFinish = new Date(Date.now() + parseInt(durVal) * 60000);
+      }
+    }
+
+    let photoUrl = null;
+    if (photoFile) {
+      const ref = storage.ref(`printer-photos/${id}/${Date.now()}_${photoFile.name}`);
+      await ref.put(photoFile);
+      photoUrl = await ref.getDownloadURL();
+    }
+
+    const update = {
+      status,
+      estimatedFinish: estimatedFinish ?? null,
+      lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    if (photoUrl) update.photoUrl = photoUrl;
+
+    await db.collection('printers').doc(id).update(update);
+    closeModal('updateOverlay');
+    toast('Status updated!', 'ok');
+  } catch (err) {
+    toast('Error: ' + err.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Update Status';
+  }
+}
+
+// ── ADD PRINTER ──
+async function addPrinter() {
+  if (!CONFIGURED) { toast('Demo mode — Firebase not configured', 'err'); return; }
+  const name = document.getElementById('newName').value.trim();
+  if (!name) { toast('Please enter a printer name', 'err'); return; }
+  try {
+    await db.collection('printers').add({
+      name,
+      status: 'available',
+      estimatedFinish: null,
+      photoUrl: null,
+      lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    closeModal('addOverlay');
+    toast(`"${name}" added!`, 'ok');
+  } catch (err) {
+    toast('Error: ' + err.message, 'err');
+  }
+}
+
+// ── HELPERS ──
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function timeAgo(d) {
+  const s = (Date.now() - d) / 1000;
+  if (s < 60)    return 'just now';
+  if (s < 3600)  return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+
+function toast(msg, type = '') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// Re-check "likely available" every minute (no Firestore write needed)
+setInterval(render, 60000);
+</script>
+</body>
+</html>
