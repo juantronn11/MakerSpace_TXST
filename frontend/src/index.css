@@ -120,6 +120,10 @@ header {
   font-size: 0.82rem; color: var(--muted); margin-bottom: 12px;
   min-height: 1.1em; display: flex; align-items: center; gap: 5px;
 }
+.card-time.countdown-display {
+  font-size: 1.08rem; font-weight: 700; color: var(--in-use);
+  font-variant-numeric: tabular-nums; letter-spacing: 0.01em;
+}
 .update-btn {
   width: 100%; padding: 9px; border-radius: 9px;
   background: var(--bg); border: 1.5px solid var(--border);
@@ -234,6 +238,14 @@ header {
   font-size: 0.8rem; font-weight: 500; color: var(--muted); transition: all 0.15s;
 }
 .dur-opt.selected label { border-color: var(--accent); background: #eff6ff; color: var(--accent); }
+
+/* custom days / hours / minutes input */
+.custom-dhm-row {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px;
+}
+.custom-dhm-field { display: flex; flex-direction: column; gap: 4px; }
+.custom-dhm-field .field-input { text-align: center; }
+.custom-dhm-label { font-size: 0.75rem; font-weight: 600; color: var(--muted); text-align: center; }
 
 /* photo upload */
 .photo-drop {

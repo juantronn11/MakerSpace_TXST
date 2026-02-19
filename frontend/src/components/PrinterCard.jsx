@@ -11,6 +11,15 @@ const STATUS_LABEL = {
 
 export default function PrinterCard({ printer, onUpdate }) {
   const [live, setLive] = useState(null) // null = not yet fetched
+  const [now,  setNow]  = useState(() => new Date())
+
+  // Tick every second while there is an active countdown
+  useEffect(() => {
+    const hasCountdown = printer.status === 'in_use' && printer.estimatedFinish
+    if (!hasCountdown) return
+    const t = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [printer.status, printer.estimatedFinish])
 
   // Poll the live endpoint every 30s when an IP is configured
   useEffect(() => {
@@ -32,12 +41,12 @@ export default function PrinterCard({ printer, onUpdate }) {
     return () => { cancelled = true; clearInterval(t) }
   }, [printer.id, printer.printerKey])
 
-  const now      = new Date()
-  const eff      = effectiveStatus(printer, now)
-  const liveJob  = live?.live && live.job ? live.job : null
-  const isLive   = live?.live === true
+  const eff     = effectiveStatus(printer, now)
+  const liveJob = live?.live && live.job ? live.job : null
+  const isLive  = live?.live === true
 
-  const timeDisplay = liveJob ? formatLiveTime(liveJob) : timeInfo(printer, now)
+  const hasCountdown   = !liveJob && printer.status === 'in_use' && printer.estimatedFinish
+  const timeDisplay    = liveJob ? formatLiveTime(liveJob) : timeInfo(printer, now)
 
   return (
     <div className="printer-card" onClick={onUpdate}>
@@ -78,7 +87,9 @@ export default function PrinterCard({ printer, onUpdate }) {
           </div>
         )}
 
-        <div className="card-time">{timeDisplay}</div>
+        <div className={`card-time${hasCountdown ? ' countdown-display' : ''}`}>
+          {timeDisplay}
+        </div>
 
         <button className="update-btn" onClick={e => { e.stopPropagation(); onUpdate() }}>
           Update Status

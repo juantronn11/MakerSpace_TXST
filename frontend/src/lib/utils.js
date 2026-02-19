@@ -15,13 +15,22 @@ export function timeInfo(printer, now = new Date()) {
   if (eff === 'likely')      return '⏰ Print time elapsed — may be free'
   if (eff === 'maintenance') return '⚠ Down for maintenance'
   if (eff === 'in_use' && printer.estimatedFinish) {
-    const ms   = printer.estimatedFinish - now
-    const mins = Math.ceil(ms / 60000)
-    return mins > 60
-      ? `⏱ ~${(ms / 3600000).toFixed(1)}h remaining`
-      : `⏱ ~${mins} min remaining`
+    const ms = printer.estimatedFinish - now
+    if (ms <= 0) return '⏰ Print time elapsed — may be free'
+    return '⏱ ' + formatCountdown(ms)
   }
   return '⏱ In use — finish time unknown'
+}
+
+export function formatCountdown(ms) {
+  const totalSecs = Math.floor(ms / 1000)
+  const h = Math.floor(totalSecs / 3600)
+  const m = Math.floor((totalSecs % 3600) / 60)
+  const s = totalSecs % 60
+  if (h > 0) {
+    return `${h}h ${String(m).padStart(2, '0')}m remaining`
+  }
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')} remaining`
 }
 
 export function timeAgo(date) {
