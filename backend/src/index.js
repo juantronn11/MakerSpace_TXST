@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import rateLimit from 'express-rate-limit'
 import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import printersRouter from './routes/printers.js'
 import { errorHandler } from './middleware/errorHandler.js'
@@ -19,10 +20,19 @@ if (!getApps().length) {
 const app = express()
 
 app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }))
-app.use(express.json())
+app.use(express.json({ limit: '64kb' }))
 
-// Health check — useful for uptime monitoring and deployment checks
-app.get('/health', (_req, res) => res.json({ ok: true, time: new Date() }))
+// General rate limit — 120 requests / minute per IP
+app.use(rateLimit({
+  windowMs:        60 * 1000,
+  max:             120,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  message:         { error: 'Too many requests, slow down.' },
+}))
+
+// Health check — no sensitive info exposed
+app.get('/health', (_req, res) => res.json({ ok: true }))
 
 app.use('/api/printers', printersRouter)
 
